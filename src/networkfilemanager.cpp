@@ -1596,6 +1596,13 @@ static std::string pj_context_get_bundle_path(PJ_CONTEXT *ctx) {
     return ctx->ca_bundle_path;
 }
 
+#if CURL_AT_LEAST_VERSION(7, 71, 0)
+static bool pj_context_get_native_ca(PJ_CONTEXT *ctx) {
+    pj_load_ini(ctx);
+    return ctx->native_ca;
+}
+#endif
+
 // ---------------------------------------------------------------------------
 
 CurlFileHandle::CurlFileHandle(PJ_CONTEXT *ctx, const char *url, CURL *handle)
@@ -1619,6 +1626,15 @@ CurlFileHandle::CurlFileHandle(PJ_CONTEXT *ctx, const char *url, CURL *handle)
         CHECK_RET(ctx, curl_easy_setopt(handle, CURLOPT_SSL_VERIFYPEER, 0L));
         CHECK_RET(ctx, curl_easy_setopt(handle, CURLOPT_SSL_VERIFYHOST, 0L));
     }
+
+
+#if CURL_AT_LEAST_VERSION(7, 71, 0)
+    if (pj_context_get_native_ca(ctx)){
+        CHECK_RET(ctx, curl_easy_setopt(handle, CURLOPT_SSL_OPTIONS,
+                                        (long)CURLSSLOPT_NATIVE_CA));
+    }
+#endif
+#endif
 
     const auto ca_bundle_path = pj_context_get_bundle_path(ctx);
     if (!ca_bundle_path.empty()) {
