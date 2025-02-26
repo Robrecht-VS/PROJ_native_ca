@@ -1634,7 +1634,6 @@ CurlFileHandle::CurlFileHandle(PJ_CONTEXT *ctx, const char *url, CURL *handle)
                                         (long)CURLSSLOPT_NATIVE_CA));
     }
 #endif
-#endif
 
     const auto ca_bundle_path = pj_context_get_bundle_path(ctx);
     if (!ca_bundle_path.empty()) {
