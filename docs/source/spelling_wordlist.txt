@@ -6,6 +6,8 @@ aeqd
 affine
 Affine
 Agri
+airocean
+Airocean
 aitoff
 Aitoff
 Albers
@@ -105,6 +107,7 @@ boundcrs
 boundCRS
 Bregler
 brussels
+Buckminster
 cadastral
 cadastre
 Cadastre
@@ -209,6 +212,7 @@ ctable
 CTable
 CTest
 ctx
+cuboctahedron
 cURL
 customizability
 customizations
@@ -871,10 +875,13 @@ specializations
 specialized
 Spectroradiometer
 spherification
+spilhaus
+Spilhaus
 splitted
 spx
 sql
 sqlite
+sqrt
 src
 srs
 standardised
@@ -1033,5 +1040,7 @@ yyyymmdd
 Zajaç
 zenodo
 zlib
+zmax
+zmin
 zur
 Zusätze

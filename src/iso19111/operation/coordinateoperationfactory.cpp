@@ -46,6 +46,7 @@
 #include "coordinateoperation_internal.hpp"
 #include "coordinateoperation_private.hpp"
 #include "oputils.hpp"
+#include "vectorofvaluesparams.hpp"
 
 // PROJ include order is sensitive
 // clang-format off
@@ -199,13 +200,13 @@ CoordinateOperationContext::~CoordinateOperationContext() = default;
 // ---------------------------------------------------------------------------
 
 CoordinateOperationContext::CoordinateOperationContext()
-    : d(internal::make_unique<Private>()) {}
+    : d(std::make_unique<Private>()) {}
 
 // ---------------------------------------------------------------------------
 
 CoordinateOperationContext::CoordinateOperationContext(
     const CoordinateOperationContext &other)
-    : d(internal::make_unique<Private>(*(other.d))) {}
+    : d(std::make_unique<Private>(*(other.d))) {}
 
 // ---------------------------------------------------------------------------
 
@@ -852,9 +853,6 @@ struct PrecomputedOpCharacteristics {
 // filterAndSort() is already huge.
 struct SortFunction {
 
-    const std::map<CoordinateOperation *, PrecomputedOpCharacteristics> &map;
-    const std::string BALLPARK_GEOGRAPHIC_OFFSET_FROM;
-
     explicit SortFunction(const std::map<CoordinateOperation *,
                                          PrecomputedOpCharacteristics> &mapIn)
         : map(mapIn), BALLPARK_GEOGRAPHIC_OFFSET_FROM(
@@ -1083,6 +1081,15 @@ struct SortFunction {
 #endif
         return ret;
     }
+
+    SortFunction(const SortFunction &) = default;
+    SortFunction &operator=(const SortFunction &) = delete;
+    SortFunction(SortFunction &&) = default;
+    SortFunction &operator=(SortFunction &&) = delete;
+
+  private:
+    const std::map<CoordinateOperation *, PrecomputedOpCharacteristics> &map;
+    const std::string BALLPARK_GEOGRAPHIC_OFFSET_FROM;
 };
 
 // ---------------------------------------------------------------------------
@@ -1467,8 +1474,7 @@ struct FilterResults {
         }
 
         // Sort !
-        SortFunction sortFunc(map);
-        std::sort(res.begin(), res.end(), sortFunc);
+        std::sort(res.begin(), res.end(), SortFunction(map));
 
 // Debug code to check consistency of the sort function
 #ifdef DEBUG_SORT
@@ -1478,6 +1484,7 @@ struct FilterResults {
 #endif
 #if defined(DEBUG_SORT) || !defined(NDEBUG)
         if (debugSort) {
+            SortFunction sortFunc(map);
             const bool assertIfIssue =
                 !(getenv("PROJ_DEBUG_SORT_FUNCT_ASSERT") != nullptr);
             for (size_t i = 0; i < res.size(); ++i) {
@@ -1538,7 +1545,7 @@ struct FilterResults {
         for (const auto &op : res) {
             const auto curAccuracy = getAccuracy(op);
             bool dummy = false;
-            const auto curExtent = getExtent(op, true, dummy);
+            auto curExtent = getExtent(op, true, dummy);
             // If a concatenated operation has an identifier, consider it as
             // a single step (to be opposed to synthesized concatenated
             // operations). Helps for example to get EPSG:8537,
@@ -1569,7 +1576,7 @@ struct FilterResults {
 
             lastOp = op.as_nullable();
             lastStepCount = curStepCount;
-            lastExtent = curExtent;
+            lastExtent = std::move(curExtent);
             lastAccuracy = curAccuracy;
         }
         res = std::move(resTemp);
@@ -1624,7 +1631,7 @@ struct FilterResults {
 
                 if (setPROJPlusExtent.find(key) == setPROJPlusExtent.end()) {
                     resTemp.emplace_back(op);
-                    setPROJPlusExtent.insert(key);
+                    setPROJPlusExtent.insert(std::move(key));
                 }
             } catch (const std::exception &) {
                 resTemp.emplace_back(op);
@@ -2390,6 +2397,8 @@ struct MyPROJStringExportableHorizVerticalHorizPROJBased final
                 methodEPSGCode ==
                     EPSG_CODE_METHOD_COORDINATE_FRAME_GEOGRAPHIC_3D ||
                 methodEPSGCode ==
+                    EPSG_CODE_METHOD_COORDINATE_FRAME_FULL_MATRIX_GEOGRAPHIC_3D ||
+                methodEPSGCode ==
                     EPSG_CODE_METHOD_TIME_DEPENDENT_COORDINATE_FRAME_GEOCENTRIC ||
                 methodEPSGCode ==
                     EPSG_CODE_METHOD_TIME_DEPENDENT_COORDINATE_FRAME_GEOGRAPHIC_2D ||
@@ -3023,34 +3032,8 @@ static bool hasIdentifiers(const CoordinateOperationNNPtr &op) {
 void CoordinateOperationFactory::Private::setCRSs(
     CoordinateOperation *co, const crs::CRSNNPtr &sourceCRS,
     const crs::CRSNNPtr &targetCRS) {
-    const auto &interpolationCRS = co->interpolationCRS();
-    co->setCRSs(sourceCRS, targetCRS, interpolationCRS);
 
-    auto invCO = dynamic_cast<InverseCoordinateOperation *>(co);
-    if (invCO) {
-        invCO->forwardOperation()->setCRSs(targetCRS, sourceCRS,
-                                           interpolationCRS);
-    }
-
-    auto transf = dynamic_cast<Transformation *>(co);
-    if (transf) {
-        transf->inverseAsTransformation()->setCRSs(targetCRS, sourceCRS,
-                                                   interpolationCRS);
-    }
-
-    auto concat = dynamic_cast<ConcatenatedOperation *>(co);
-    if (concat) {
-        auto first = concat->operations().front().get();
-        auto &firstTarget(first->targetCRS());
-        if (firstTarget) {
-            setCRSs(first, sourceCRS, NN_NO_CHECK(firstTarget));
-        }
-        auto last = concat->operations().back().get();
-        auto &lastSource(last->sourceCRS());
-        if (lastSource) {
-            setCRSs(last, NN_NO_CHECK(lastSource), targetCRS);
-        }
-    }
+    co->setCRSsUpdateInverse(sourceCRS, targetCRS, co->interpolationCRS());
 }
 
 // ---------------------------------------------------------------------------
@@ -3348,7 +3331,7 @@ void CoordinateOperationFactory::Private::createOperationsWithDatumPivot(
     // by allowing directly all transformation. There is no strong reason for
     // that particular case, except that otherwise we'd get different results
     // for test/cli/test_cs2cs_ignf.yaml when transforming a point outside
-    // the area of validity... Not totally sure the behaviour we try to preserve
+    // the area of validity... Not totally sure the behavior we try to preserve
     // here with the particular case is fundamentally better than the general
     // case. The general case is needed typically for the RGNC91-93 -> RGNC15
     // transformation where we we need to actually use a transformation between
@@ -3726,6 +3709,31 @@ CoordinateOperationFactory::Private::createOperations(
     if (boundDst && compoundSrc) {
         return applyInverse(createOperations(targetCRS, targetEpoch, sourceCRS,
                                              sourceEpoch, context));
+    }
+
+    if (dynamic_cast<const crs::EngineeringCRS *>(sourceCRS.get()) &&
+        sourceCRS->_isEquivalentTo(targetCRS.get())) {
+        std::string name("Identity transformation from ");
+        name += sourceCRS->nameStr();
+        name += " to ";
+        name += targetCRS->nameStr();
+        res.push_back(Transformation::create(
+            util::PropertyMap()
+                .set(common::IdentifiedObject::NAME_KEY, name)
+                .set(common::ObjectUsage::DOMAIN_OF_VALIDITY_KEY,
+                     metadata::Extent::WORLD),
+            sourceCRS, targetCRS, nullptr,
+            createMethodMapNameEPSGCode(
+                EPSG_CODE_METHOD_CARTESIAN_GRID_OFFSETS),
+            VectorOfParameters{
+                createOpParamNameEPSGCode(EPSG_CODE_PARAMETER_EASTING_OFFSET),
+                createOpParamNameEPSGCode(EPSG_CODE_PARAMETER_NORTHING_OFFSET),
+            },
+            VectorOfValues{
+                common::Length(0),
+                common::Length(0),
+            },
+            {metadata::PositionalAccuracy::create("0")}));
     }
 
     return res;
@@ -4274,13 +4282,41 @@ CoordinateOperationFactory::Private::createOperationsGeogToVertFromGeoid(
             const auto &modelAccuracies =
                 model->coordinateOperationAccuracies();
             std::vector<CoordinateOperationNNPtr> transformationsForGrid;
+            if (authFactory) {
+                transformationsForGrid =
+                    io::DatabaseContext::getTransformationsForGridName(
+                        authFactory->databaseContext(), projFilename);
+            }
+
+            // Only select transformations whose datum of the target vertical
+            // CRS match the one of the target vertical CRS of interest (when
+            // there's such match) Helps for example if specifying GEOID
+            // g2012bp0 whose has a record for Puerto Rico and another one for
+            // Virgin Islands.
+            {
+                std::vector<CoordinateOperationNNPtr>
+                    transformationsForGridMatchingDatum;
+                for (const auto &op : transformationsForGrid) {
+                    const auto opTargetCRS =
+                        dynamic_cast<const crs::VerticalCRS *>(
+                            op->targetCRS().get());
+                    if (opTargetCRS &&
+                        opTargetCRS->datumNonNull(dbContext)->_isEquivalentTo(
+                            vertDst->datumNonNull(dbContext).get(),
+                            util::IComparable::Criterion::EQUIVALENT)) {
+                        transformationsForGridMatchingDatum.push_back(op);
+                    }
+                }
+                if (!transformationsForGridMatchingDatum.empty()) {
+                    transformationsForGrid =
+                        std::move(transformationsForGridMatchingDatum);
+                }
+            }
+
             double accuracy = -1;
             size_t idx = static_cast<size_t>(-1);
             if (modelAccuracies.empty()) {
                 if (authFactory) {
-                    transformationsForGrid =
-                        io::DatabaseContext::getTransformationsForGridName(
-                            authFactory->databaseContext(), projFilename);
                     for (size_t i = 0; i < transformationsForGrid.size(); ++i) {
                         const auto &transf = transformationsForGrid[i];
                         const double transfAcc = getAccuracy(transf);
@@ -4304,11 +4340,6 @@ CoordinateOperationFactory::Private::createOperationsGeogToVertFromGeoid(
             // Otherwise fallback to the extent of a transformation using
             // the grid.
             if (extent == nullptr && authFactory != nullptr) {
-                if (transformationsForGrid.empty()) {
-                    transformationsForGrid =
-                        io::DatabaseContext::getTransformationsForGridName(
-                            authFactory->databaseContext(), projFilename);
-                }
                 if (idx != static_cast<size_t>(-1)) {
                     const auto &transf = transformationsForGrid[idx];
                     extent = getExtent(transf, true, dummy);
@@ -5895,27 +5926,25 @@ void CoordinateOperationFactory::Private::createOperationsCompoundToGeog(
                                         "CGVD2013a(1997) height") ||
                          (is2002 && componentsSrc[1]->nameStr() ==
                                         "CGVD2013a(2002) height"))) {
-                        const auto newGeogCRS_2D(
+                        std::vector<crs::CRSNNPtr> intermComponents{
                             authFactoryEPSG->createCoordinateReferenceSystem(
                                 is1997 ? "8240" : // NAD83(CSRS)v3 2D
                                     "8246"        // NAD83(CSRS)v4 2D
-                                ));
-                        const auto newGeogCRS_3D(
-                            authFactoryEPSG->createCoordinateReferenceSystem(
-                                is1997 ? "8239" : // NAD83(CSRS)v3 3D
-                                    "8244"        // NAD83(CSRS)v4 3D
-                                ));
-                        std::vector<crs::CRSNNPtr> intermComponents{
-                            newGeogCRS_2D, componentsSrc[1]};
+                                ),
+                            componentsSrc[1]};
                         auto properties = util::PropertyMap().set(
                             common::IdentifiedObject::NAME_KEY,
                             intermComponents[0]->nameStr() + " + " +
                                 intermComponents[1]->nameStr());
                         auto newCompound = crs::CompoundCRS::create(
                             properties, intermComponents);
-                        auto ops = createOperations(newCompound, sourceEpoch,
-                                                    newGeogCRS_3D, sourceEpoch,
-                                                    context);
+                        auto ops = createOperations(
+                            newCompound, sourceEpoch,
+                            authFactoryEPSG->createCoordinateReferenceSystem(
+                                is1997 ? "8239" : // NAD83(CSRS)v3 3D
+                                    "8244"        // NAD83(CSRS)v4 3D
+                                ),
+                            sourceEpoch, context);
                         for (const auto &op : ops) {
                             auto opClone = op->shallowClone();
                             setCRSs(opClone.get(), sourceCRS, targetCRS);
@@ -6182,7 +6211,7 @@ void CoordinateOperationFactory::Private::createOperationsCompoundToGeog(
         }
 
         if (horizTransforms.empty() || verticalTransforms.empty()) {
-            res = horizTransforms;
+            res = std::move(horizTransforms);
             return;
         }
 
@@ -7397,7 +7426,7 @@ crs::CRSNNPtr CRS::getResolvedCRS(const crs::CRSNNPtr &crs,
                 auto matches = authFactory->createObjectsFromName(
                     name, {objectType}, false, 2);
                 if (matches.size() == 1) {
-                    const auto match =
+                    auto match =
                         util::nn_static_pointer_cast<crs::CRS>(matches.front());
                     if (approxExtent || !extentOut) {
                         extentOut = operation::getExtent(match);

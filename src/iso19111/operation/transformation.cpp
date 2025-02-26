@@ -91,7 +91,7 @@ Transformation::Transformation(
     const crs::CRSPtr &interpolationCRSIn, const OperationMethodNNPtr &methodIn,
     const std::vector<GeneralParameterValueNNPtr> &values,
     const std::vector<metadata::PositionalAccuracyNNPtr> &accuracies)
-    : SingleOperation(methodIn), d(internal::make_unique<Private>()) {
+    : SingleOperation(methodIn), d(std::make_unique<Private>()) {
     setParameterValues(values);
     setCRSs(sourceCRSIn, targetCRSIn, interpolationCRSIn);
     setAccuracies(accuracies);
@@ -107,7 +107,7 @@ Transformation::~Transformation() = default;
 
 Transformation::Transformation(const Transformation &other)
     : CoordinateOperation(other), SingleOperation(other),
-      d(internal::make_unique<Private>(*other.d)) {}
+      d(std::make_unique<Private>(*other.d)) {}
 
 // ---------------------------------------------------------------------------
 
@@ -211,6 +211,8 @@ std::vector<double> Transformation::getTOWGS84Parameters(
         methodEPSGCode == EPSG_CODE_METHOD_COORDINATE_FRAME_GEOGRAPHIC_2D ||
         methodEPSGCode ==
             EPSG_CODE_METHOD_COORDINATE_FRAME_FULL_MATRIX_GEOGRAPHIC_2D ||
+        methodEPSGCode ==
+            EPSG_CODE_METHOD_COORDINATE_FRAME_FULL_MATRIX_GEOGRAPHIC_3D ||
         methodEPSGCode == EPSG_CODE_METHOD_COORDINATE_FRAME_GEOGRAPHIC_3D) {
         sevenParamsTransform = true;
         invertRotSigns = true;
@@ -1416,6 +1418,8 @@ createApproximateInverseIfPossible(const Transformation *op) {
         methodEPSGCode == EPSG_CODE_METHOD_COORDINATE_FRAME_GEOGRAPHIC_2D ||
         methodEPSGCode ==
             EPSG_CODE_METHOD_COORDINATE_FRAME_FULL_MATRIX_GEOGRAPHIC_2D ||
+        methodEPSGCode ==
+            EPSG_CODE_METHOD_COORDINATE_FRAME_FULL_MATRIX_GEOGRAPHIC_3D ||
         methodEPSGCode == EPSG_CODE_METHOD_COORDINATE_FRAME_GEOGRAPHIC_3D) {
         sevenParamsTransform = true;
     } else if (
@@ -1733,11 +1737,12 @@ TransformationNNPtr Transformation::inverseAsTransformation() const {
     if (methodEPSGCode == EPSG_CODE_METHOD_CHANGE_VERTICAL_UNIT) {
         const double convFactor = parameterValueNumericAsSI(
             EPSG_CODE_PARAMETER_UNIT_CONVERSION_SCALAR);
+        // coverity[divide_by_zero]
+        const double invConvFactor = convFactor == 0.0 ? 0.0 : 1.0 / convFactor;
         return Private::registerInv(
             this, createChangeVerticalUnit(
                       createPropertiesForInverse(this, false, false),
-                      l_targetCRS, l_sourceCRS,
-                      common::Scale(convFactor == 0.0 ? 0.0 : 1.0 / convFactor),
+                      l_targetCRS, l_sourceCRS, common::Scale(invConvFactor),
                       coordinateOperationAccuracies()));
     }
 

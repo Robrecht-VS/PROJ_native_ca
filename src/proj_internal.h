@@ -76,6 +76,7 @@
 #include "proj/common.hpp"
 #include "proj/coordinateoperation.hpp"
 
+#include <cmath>
 #include <string>
 #include <vector>
 
@@ -687,6 +688,8 @@ struct PJconsts {
     PJconsts();
     PJconsts(const PJconsts &) = delete;
     PJconsts &operator=(const PJconsts &) = delete;
+
+    void copyStateFrom(const PJconsts &);
 };
 
 /* Parameter list (a copy of the +proj=... etc. parameters) */
@@ -820,7 +823,7 @@ struct pj_ctx {
     std::string endpoint{};
     projNetworkCallbacksAndData networking{};
     std::string ca_bundle_path{};
-    bool native_ca=false;
+    bool native_ca = false;
     projGridChunkCache gridChunkCache{};
     TMercAlgo defaultTmercAlgo =
         TMercAlgo::PODER_ENGSAGER; // can be overridden by content of proj.ini
@@ -919,6 +922,9 @@ double pj_sinhpsi2tanphi(PJ_CONTEXT *, const double, const double);
 double *pj_authset(double);
 double pj_authlat(double, double *);
 
+double pj_conformal_lat(double phi, double e);
+double pj_conformal_lat_inverse(double chi, double e, double threshold);
+
 COMPLEX pj_zpoly1(COMPLEX, const COMPLEX *, int);
 COMPLEX pj_zpolyd1(COMPLEX, const COMPLEX *, int, COMPLEX *);
 
@@ -982,6 +988,10 @@ PJ_LP pj_generic_inverse_2d(PJ_XY xy, PJ *P, PJ_LP lpInitial,
                             double deltaXYTolerance);
 
 PJ *pj_obj_create(PJ_CONTEXT *ctx, const NS_PROJ::util::BaseObjectNNPtr &objIn);
+
+PJ_DIRECTION pj_opposite_direction(PJ_DIRECTION dir);
+
+void pj_warn_about_missing_grid(PJ *P);
 
 /*****************************************************************************/
 /*                                                                           */

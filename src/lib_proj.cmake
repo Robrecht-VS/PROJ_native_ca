@@ -28,6 +28,7 @@ print_variable(ENABLE_IPO)
 ##############################################
 
 set(SRC_LIBPROJ_PROJECTIONS
+  projections/airocean.cpp
   projections/aeqd.cpp
   projections/adams.cpp
   projections/gnom.cpp
@@ -140,6 +141,7 @@ set(SRC_LIBPROJ_PROJECTIONS
   projections/calcofi.cpp
   projections/eqearth.cpp
   projections/col_urban.cpp
+  projections/spilhaus.cpp
 )
 
 set(SRC_LIBPROJ_CONVERSIONS
@@ -186,6 +188,7 @@ set(SRC_LIBPROJ_ISO19111
   iso19111/operation/conversion.cpp
   iso19111/operation/esriparammappings.cpp
   iso19111/operation/oputils.cpp
+  iso19111/operation/parametervalue.cpp
   iso19111/operation/parammappings.cpp
   iso19111/operation/projbasedoperation.cpp
   iso19111/operation/singleoperation.cpp
@@ -194,44 +197,63 @@ set(SRC_LIBPROJ_ISO19111
 )
 
 set(SRC_LIBPROJ_CORE
-  4D_api.cpp
   aasincos.cpp
   adjlon.cpp
+  area.cpp
   auth.cpp
+  coord_operation.cpp
+  coordinates.cpp
+  create.cpp
+  crs_to_crs.cpp
   ctx.cpp
   datum_set.cpp
   datums.cpp
   deriv.cpp
+  dist.cpp
   dmstor.cpp
   ell_set.cpp
   ellps.cpp
   factors.cpp
+  filemanager.hpp
+  filemanager.cpp
   fwd.cpp
   gauss.cpp
   generic_inverse.cpp
   geodesic.c
+  grids.hpp
+  grids.cpp
+  info.cpp
   init.cpp
   initcache.cpp
   internal.cpp
   inv.cpp
+  latitudes.cpp
   list.cpp
   log.cpp
   malloc.cpp
   mlfn.cpp
   msfn.cpp
   mutex.cpp
+  networkfilemanager.cpp
   param.cpp
   phi2.cpp
   pipeline.cpp
   pj_list.h
   pr_list.cpp
   proj_internal.h
+  proj_json_streaming_writer.hpp
+  proj_json_streaming_writer.cpp
   proj_mdist.cpp
   qsfn.cpp
   release.cpp
   rtodms.cpp
   strerrno.cpp
   strtod.cpp
+  sqlite3_utils.hpp
+  sqlite3_utils.cpp
+  tracing.cpp
+  trans.cpp
+  trans_bounds.cpp
   tsfn.cpp
   units.cpp
   wkt1_generated_parser.c
@@ -245,16 +267,6 @@ set(SRC_LIBPROJ_CORE
   wkt_parser.cpp
   wkt_parser.hpp
   zpoly1.cpp
-  proj_json_streaming_writer.hpp
-  proj_json_streaming_writer.cpp
-  tracing.cpp
-  grids.hpp
-  grids.cpp
-  filemanager.hpp
-  filemanager.cpp
-  networkfilemanager.cpp
-  sqlite3_utils.hpp
-  sqlite3_utils.cpp
   ${CMAKE_CURRENT_BINARY_DIR}/proj_config.h
 )
 
@@ -428,20 +440,20 @@ if (EMBED_RESOURCE_FILES)
   endif()
 endif()
 
-set(EMBED_GRIDS_DIRECTORY "" CACHE PATH "Directory that contains .tif and .json files to embed into libproj")
+set(EMBED_RESOURCE_DIRECTORY "" CACHE PATH "Directory that contains .tif, .json or .pol files to embed into libproj")
 set(FILES_TO_EMBED)
-if (EMBED_GRIDS_DIRECTORY)
+if (EMBED_RESOURCE_DIRECTORY)
     if (NOT EMBED_RESOURCE_FILES)
-        message(FATAL_ERROR "EMBED_RESOURCE_FILES should be set to ON when EMBED_GRIDS_DIRECTORY is set")
+        message(FATAL_ERROR "EMBED_RESOURCE_FILES should be set to ON when EMBED_RESOURCE_DIRECTORY is set")
     endif()
 
-    if (NOT IS_DIRECTORY ${EMBED_GRIDS_DIRECTORY})
-        message(FATAL_ERROR "${EMBED_GRIDS_DIRECTORY} is not a valid directory")
+    if (NOT IS_DIRECTORY ${EMBED_RESOURCE_DIRECTORY})
+        message(FATAL_ERROR "${EMBED_RESOURCE_DIRECTORY} is not a valid directory")
     endif()
 
-    file(GLOB FILES_TO_EMBED "${EMBED_GRIDS_DIRECTORY}/*.tif" "${EMBED_GRIDS_DIRECTORY}/*.json")
+    file(GLOB FILES_TO_EMBED "${EMBED_RESOURCE_DIRECTORY}/*.tif" "${EMBED_RESOURCE_DIRECTORY}/*.json"  "${EMBED_RESOURCE_DIRECTORY}/*.pol")
     if (NOT FILES_TO_EMBED)
-        message(FATAL_ERROR "No .tif or .json files found in ${EMBED_GRIDS_DIRECTORY}")
+        message(FATAL_ERROR "No .tif, .json or .pol files found in ${EMBED_RESOURCE_DIRECTORY}")
     endif()
 endif()
 

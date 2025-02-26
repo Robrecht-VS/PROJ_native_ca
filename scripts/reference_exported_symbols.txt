@@ -356,6 +356,8 @@ osgeo::proj::io::AuthorityFactory::createDatumEnsemble(std::string const&, std::
 osgeo::proj::io::AuthorityFactory::createDatum(std::string const&) const
 osgeo::proj::io::AuthorityFactory::create(dropbox::oxygen::nn<std::shared_ptr<osgeo::proj::io::DatabaseContext> > const&, std::string const&)
 osgeo::proj::io::AuthorityFactory::createEllipsoid(std::string const&) const
+osgeo::proj::io::AuthorityFactory::createEngineeringCRS(std::string const&) const
+osgeo::proj::io::AuthorityFactory::createEngineeringDatum(std::string const&) const
 osgeo::proj::io::AuthorityFactory::createExtent(std::string const&) const
 osgeo::proj::io::AuthorityFactory::createFromCoordinateReferenceSystemCodes(std::string const&, std::string const&) const
 osgeo::proj::io::AuthorityFactory::createFromCoordinateReferenceSystemCodes(std::string const&, std::string const&, std::string const&, std::string const&, bool, bool, bool, bool, bool, bool, std::shared_ptr<osgeo::proj::metadata::Extent> const&, std::shared_ptr<osgeo::proj::metadata::Extent> const&) const
@@ -1120,6 +1122,7 @@ proj_torad
 proj_trans
 proj_trans_array
 proj_trans_bounds
+proj_trans_bounds_3D
 proj_trans_generic
 proj_trans_get_last_used_operation
 proj_unit_list_destroy
